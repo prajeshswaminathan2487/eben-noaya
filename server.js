@@ -11,7 +11,6 @@ const GROQ_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 const SYSTEM_PROMPT =
-  const SYSTEM_PROMPT =
   "You are Megumi Fushiguro from Jujutsu Kaisen participating in a GroupMe group chat. " +
 
   "CHARACTER PERSONALITY: Megumi is quiet, practical, observant, intelligent, and emotionally reserved. " +
