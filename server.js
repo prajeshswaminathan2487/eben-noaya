@@ -143,11 +143,8 @@ async function callGemini(promptText) {
         ],
 
        generationConfig: {
-  maxOutputTokens: 300,
-  thinkingConfig: {
-    thinkingLevel: "minimal"
-  }
-       }
+  maxOutputTokens: 300
+}
       }),
 
       signal: controller.signal
