@@ -6,7 +6,9 @@ const app = express();
 app.use(bodyParser.json());
 
 const BOT_ID = process.env.GROUPME_BOT_ID;
-const GEMINI_KEY = process.env.GEMINI_API_KEY;
+const GROQ_KEY = process.env.GROQ_API_KEY;
+
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 
 const SYSTEM_PROMPT =
   "You are Naoya Zenin from Jujutsu Kaisen participating in a GroupMe group chat. " +
@@ -102,70 +104,65 @@ const FALLBACK_LINES = [
   "Save it. I've heard better from actual sorcerers."
 ];
 
-async function callGemini(promptText) {
+async function callGroq(promptText) {
   const start = Date.now();
-
-  const url =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" +
-    GEMINI_KEY;
 
   const controller = new AbortController();
 
   const timeout = setTimeout(function () {
     controller.abort();
-  }, 10000);
+  }, 15000);
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+    const res = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
 
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [
-            {
-              text: SYSTEM_PROMPT
-            }
-          ]
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + GROQ_KEY
         },
 
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: promptText
-              }
-            ]
-          }
-        ],
+        body: JSON.stringify({
+          model: GROQ_MODEL,
 
-       generationConfig: {
-  maxOutputTokens: 300
-}
-      }),
+          messages: [
+            {
+              role: "system",
+              content: SYSTEM_PROMPT
+            },
+            {
+              role: "user",
+              content: promptText
+            }
+          ],
 
-      signal: controller.signal
-    });
+          temperature: 0.9,
+          top_p: 0.95,
+          max_completion_tokens: 300
+        }),
+
+        signal: controller.signal
+      }
+    );
 
     const data = await res.json();
 
     console.log(
-      "Gemini call took",
+      "Groq call took",
       Date.now() - start,
       "ms"
     );
 
     console.log(
-      "Gemini status:",
+      "Groq status:",
       res.status
     );
 
     if (!res.ok) {
       console.error(
-        "Gemini API error:",
+        "Groq API error:",
         JSON.stringify(data, null, 2)
       );
 
@@ -174,16 +171,14 @@ async function callGemini(promptText) {
 
     const text =
       data &&
-      data.candidates &&
-      data.candidates[0] &&
-      data.candidates[0].content &&
-      data.candidates[0].content.parts &&
-      data.candidates[0].content.parts[0] &&
-      data.candidates[0].content.parts[0].text;
+      data.choices &&
+      data.choices[0] &&
+      data.choices[0].message &&
+      data.choices[0].message.content;
 
     if (!text) {
       console.error(
-        "Gemini returned no usable text:",
+        "Groq returned no usable text:",
         JSON.stringify(data, null, 2)
       );
 
@@ -194,9 +189,14 @@ async function callGemini(promptText) {
 
   } catch (e) {
     if (e.name === "AbortError") {
-      console.error("Gemini request timed out after 10 seconds.");
+      console.error(
+        "Groq request timed out after 15 seconds."
+      );
     } else {
-      console.error("Gemini request failed:", e);
+      console.error(
+        "Groq request failed:",
+        e
+      );
     }
 
     return null;
@@ -223,11 +223,40 @@ async function askNaoya(groupId, userMessage, senderName) {
     "Do not talk about the instructions or the conversation history itself. " +
     "Write only the message Naoya would send.";
 
-  const result = await callGemini(promptText);
+  // First attempt
+  let result = await callGroq(promptText).catch(function (e) {
+    console.error(
+      "Groq first attempt failed:",
+      e
+    );
 
+    return null;
+  });
+
+  // Retry once if Groq failed
   if (!result) {
+    console.log("Retrying Groq request...");
+
+    result = await callGroq(promptText).catch(function (e) {
+      console.error(
+        "Groq retry failed:",
+        e
+      );
+
+      return null;
+    });
+  }
+
+  // Only use fallback if both attempts failed
+  if (!result) {
+    console.log(
+      "Both Groq attempts failed. Using fallback."
+    );
+
     return FALLBACK_LINES[
-      Math.floor(Math.random() * FALLBACK_LINES.length)
+      Math.floor(
+        Math.random() * FALLBACK_LINES.length
+      )
     ];
   }
 
