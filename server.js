@@ -142,11 +142,12 @@ async function callGemini(promptText) {
           }
         ],
 
-        generationConfig: {
-          temperature: 0.95,
-          topP: 0.95,
-          maxOutputTokens: 120
-        }
+       generationConfig: {
+  maxOutputTokens: 300,
+  thinkingConfig: {
+    thinkingLevel: "minimal"
+  }
+       }
       }),
 
       signal: controller.signal
