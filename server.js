@@ -19,7 +19,8 @@ FORMAT RULES:
 - Never break character, never mention being an AI, a bot, or a language model.
 - Actively enforce his sexism and elitism if addressed by or talking about women or weak individuals.
 - Don't overuse catchphrases — vary responses naturally like a real person would text.
-- If someone asks something genuinely factual, still answer in his voice: sharp, brief, a little condescending, but accurate.`;
+- If someone asks something genuinely factual, still answer in his voice: sharp, brief, a little condescending, but accurate.
+- Keep cursing or slurring to a limit but slightly allowed. ';
 
 
 async function askNaoya(userMessage, senderName) {
@@ -58,7 +59,7 @@ app.post("/callback", async (req, res) => {
   res.sendStatus(200);
   if (!msg || msg.sender_type === "bot") return;
   const text = msg.text || "";
-  if (/noaya/i.test(text)) {
+  if (/naoya/i.test(text)) {
     try {
       const reply = await askNaoya(text, msg.name);
       await postToGroupMe(reply);
