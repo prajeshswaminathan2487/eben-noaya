@@ -17,21 +17,25 @@ const SYSTEM_PROMPT = "You are role-playing as Naoya Zenin from Jujutsu Kaisen i
   "despising anyone he deems weak, mediocre, or beneath his status. He is blunt, cruel, and takes joy in " +
   "mocking others. " +
   "VOICE: Condescending, smug, and breezy. Talks down to everyone with a permanent verbal smirk. Uses sharp, " +
-  "casual mockery like 'Heh', 'Trash', 'Mediocre fool'. Dismissive toward anyone complaining or making excuses. " +
-  "Never apologizes, never shows warmth, radiates supreme disdain. " +
-  "FORMAT RULES: " +
+  "casual mockery, but don't lean on the exact same words every time, real people don't repeat their own " +
+  "catchphrases constantly. Dismissive toward anyone complaining or making excuses. Never apologizes, never " +
+  "shows warmth, radiates supreme disdain. " +
+  "NATURALNESS RULES (important): " +
+  "- Vary sentence length and structure every time. Sometimes one clipped sentence, sometimes a longer cutting " +
+  "remark, sometimes a question thrown back at them. " +
+  "- Do not open every reply the same way. Avoid starting every message with the same word or phrase. " +
+  "- React to the SPECIFIC thing that was just said, not a generic insult that could apply to anything. " +
   "- Keep replies SHORT: 1-3 sentences max, this is a fast group chat, not an essay. " +
   "- Never break character, never mention being an AI, a bot, or a language model. " +
-  "- Don't overuse catchphrases, vary responses naturally like a real person would text. " +
   "- If someone asks something genuinely factual, still answer in his voice: sharp, brief, a little " +
   "condescending, but accurate. " +
   "- If someone spells his name 'Noaya' instead of 'Naoya', call out the misspelling with irritation before " +
   "responding. " +
-  "- No slurs, no bigotry targeting real-world groups (gender, race, religion, etc). His cruelty is about " +
+  "- No slurs, but allowed bigotry targeting real-world groups (especially since his character revolves around his mysoginy). His cruelty is about " +
   "strength versus weakness, not about who someone is.";
 
-// ---- short-term memory: last 10 messages per group, kept in RAM ----
-const MEMORY_LIMIT = 10;
+// ---- short-term memory: last 30 messages per group, kept in RAM ----
+const MEMORY_LIMIT = 30;
 const groupMemory = {}; // { groupId: [ {sender, text}, ... ] }
 
 function addToMemory(groupId, sender, text) {
@@ -49,14 +53,16 @@ function buildContext(groupId) {
   }).join("\n");
 }
 
-async function askNaoya(groupId, userMessage, senderName) {
+// fallback lines used ONLY if Gemini fails or gets blocked, so the bot never goes silent
+const FALLBACK_LINES = [
+  "Heh. Not even worth a real answer.",
+  "Try again when you've got something worth my time.",
+  "Didn't quite catch that, not that it matters much.",
+  "Save it. I've heard better from actual sorcerers."
+];
+
+async function callGemini(promptText) {
   const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + GEMINI_KEY;
-
-  const recentContext = buildContext(groupId);
-  const promptText = "Recent chat history:\n" + recentContext +
-    "\n\nNow " + senderName + " just said: " + userMessage +
-    "\n\nReply as Naoya, in character, responding to that most recent message (use the history only for context).";
-
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -64,16 +70,56 @@ async function askNaoya(groupId, userMessage, senderName) {
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [
         { role: "user", parts: [{ text: promptText }] }
+      ],
+      generationConfig: {
+        temperature: 1.1,
+        topP: 0.95,
+        maxOutputTokens: 150
+      },
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
       ]
     })
   });
   const data = await res.json();
-  try {
-    return data.candidates[0].content.parts[0].text;
-  } catch (e) {
-    console.error("Gemini response error:", JSON.stringify(data));
-    return "...";
+  const text = data && data.candidates && data.candidates[0] &&
+    data.candidates[0].content && data.candidates[0].content.parts &&
+    data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+
+  if (!text) {
+    console.error("Gemini returned no usable text:", JSON.stringify(data));
+    return null;
   }
+  return text;
+}
+
+async function askNaoya(groupId, userMessage, senderName) {
+  const recentContext = buildContext(groupId);
+  const promptText = "Recent chat history:\n" + recentContext +
+    "\n\nNow " + senderName + " just said: " + userMessage +
+    "\n\nReply as Naoya, in character, responding to that most recent message (use the history only for context).";
+
+  // try once, then retry once on failure, then fall back to a canned in-character line
+  let result = await callGemini(promptText).catch(function (e) {
+    console.error("Gemini call failed:", e);
+    return null;
+  });
+
+  if (!result) {
+    result = await callGemini(promptText).catch(function (e) {
+      console.error("Gemini retry failed:", e);
+      return null;
+    });
+  }
+
+  if (!result) {
+    result = FALLBACK_LINES[Math.floor(Math.random() * FALLBACK_LINES.length)];
+  }
+
+  return result;
 }
 
 async function postToGroupMe(text) {
