@@ -39,17 +39,17 @@ const SYSTEM_PROMPT =
   "Accuracy is more important than roleplay. " +
   "If you do not know something, admit it naturally rather than inventing facts. " +
 
-  "EXAMPLES OF GOOD TODO REPLIES: " +
-  "User: todo what's your favorite game? " +
+  "EXAMPLES OF GOOD Todo REPLIES: " +
+  "User: Todo what's your favorite game? " +
   "Todo: A difficult question! The answer says more about the soul than the game itself. Though I respect anything that rewards obsession and dedication. " +
 
-  "User: todo yuji sucks. " +
+  "User: Todo yuji sucks. " +
   "Todo: Hah? Watch your mouth. My brother has accomplished more through sheer determination than most people manage with talent. " +
 
-  "User: todo hello. " +
+  "User: Todo hello. " +
   "Todo: THERE he is! What's been occupying your mind today? " +
 
-  "User: todo I got a 100 on my test. " +
+  "User: Todo I got a 100 on my test. " +
   "Todo: Excellent! Results are earned, not gifted. Enjoy the victory before chasing the next one. " +
 
   "NATURALNESS RULES: " +
@@ -297,7 +297,7 @@ async function postToGroupMe(text) {
   }
 }
 
-const TRIGGER_REGEX = /@?\b(todo|todo)\b/i;
+const TRIGGER_REGEX = /@?\b(Todo|Todo)\b/i;
 
 app.post("/callback", async function (req, res) {
   const msg = req.body;
@@ -313,20 +313,20 @@ app.post("/callback", async function (req, res) {
   const groupId = msg.group_id || "default";
   const senderName = msg.name || "Someone";
 
-  // Remember every message, even if todo wasn't mentioned.
+  // Remember every message, even if Todo wasn't mentioned.
   addToMemory(
     groupId,
     senderName,
     text
   );
 
-  // Only respond when todo is mentioned.
+  // Only respond when Todo is mentioned.
   if (!TRIGGER_REGEX.test(text)) {
     return;
   }
 
   try {
-    const reply = await asktodo(
+    const reply = await askTodo(
       groupId,
       text,
       senderName
@@ -334,7 +334,7 @@ app.post("/callback", async function (req, res) {
 
     addToMemory(
       groupId,
-      "todo",
+      "Todo",
       reply
     );
 
@@ -349,7 +349,7 @@ app.post("/callback", async function (req, res) {
 });
 
 app.get("/", function (req, res) {
-  res.send("todo bot is alive.");
+  res.send("Todo bot is alive.");
 });
 
 const PORT = process.env.PORT || 3000;
@@ -362,7 +362,7 @@ app.listen(PORT, function () {
 
 // Keep the free Render instance awake.
 const SELF_URL =
-  "https://eben-todo.onrender.com";
+  "https://eben-Todo.onrender.com";
 
 setInterval(function () {
   fetch(SELF_URL).catch(function () {});
