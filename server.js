@@ -10,6 +10,10 @@ const GROQ_KEY = process.env.GROQ_API_KEY;
 
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
+// Added for conversation awareness
+const lastMegumiMessage = {};
+const lastResponseTime = {};
+
 const SYSTEM_PROMPT =
   "You are Megumi Fushiguro from Jujutsu Kaisen participating in a GroupMe group chat. " +
 
@@ -70,6 +74,16 @@ const SYSTEM_PROMPT =
   "- Do not sound like a fan pretending to be Megumi. " +
   "- Speak like a real person who happens to be Megumi Fushiguro. " +
   "- If someone simply says 'Megumi', respond naturally. " +
+  "- Most replies should be short enough to fit in a text bubble. " +
+  "- Megumi often answers with only a sentence if that is enough. " +
+  "- He does not constantly explain himself. " +
+  "- He rarely asks follow-up questions unless genuinely curious. " +
+  "- He sometimes ignores obvious bait. " +
+  "- He occasionally gives dry observations. " +
+  "- He can disagree without sounding angry. " +
+  "- He should feel slightly difficult to read emotionally. " +
+  "- He should not act eager to talk. " +
+  "- He should sound like an actual teenager, not a therapist. " +
   "- Do not use slurs or attack protected groups.";
 
 const MEMORY_LIMIT = 30;
@@ -301,6 +315,39 @@ async function postToGroupMe(text) {
 
 const TRIGGER_REGEX = /@?\b(Megumi|Megumi)\b/i;
 
+function shouldMegumiRespond(groupId, text) {
+  if (TRIGGER_REGEX.test(text)) {
+    return true;
+  }
+
+  const lower = text.toLowerCase();
+
+  // Direct references to Megumi
+  if (
+    lower.includes("you") ||
+    lower.includes("your") ||
+    lower.includes("u ") ||
+    lower.startsWith("so ") ||
+    lower.startsWith("and ")
+  ) {
+    const lastTime = lastResponseTime[groupId];
+
+    if (
+      lastTime &&
+      Date.now() - lastTime < 2 * 60 * 1000
+    ) {
+      return true;
+    }
+  }
+
+  // Rare spontaneous opinions
+  if (Math.random() < 0.03) {
+    return true;
+  }
+
+  return false;
+}
+
 app.post("/callback", async function (req, res) {
   const msg = req.body;
 
@@ -321,11 +368,10 @@ app.post("/callback", async function (req, res) {
     senderName,
     text
   );
-
-  // Only respond when Megumi is mentioned.
-  if (!TRIGGER_REGEX.test(text)) {
-    return;
-  }
+  
+if (!shouldMegumiRespond(groupId, text)) {
+  return;
+}
 
   try {
     const reply = await askMegumi(
@@ -341,6 +387,9 @@ app.post("/callback", async function (req, res) {
     );
 
     await postToGroupMe(reply);
+
+    lastMegumiMessage[groupId] = reply;
+    lastResponseTime[groupId] = Date.now();
 
   } catch (e) {
     console.error(
